@@ -1,0 +1,224 @@
+import javax.swing.*;
+import javax.swing.table.DefaultTableModel;
+import java.awt.*;
+import java.awt.event.ActionEvent;
+import java.sql.*;
+
+public class PersonalInfoSystem extends JFrame {
+    // Database connection parameters
+    private static final String DB_URL = "jdbc:mysql://localhost:3306/aaditya";
+    private static final String DB_USER = "root"; // Replace with your MySQL username
+    private static final String DB_PASSWORD = "Farfromweak@120705"; // Replace with your MySQL password
+
+    // GUI Components
+    private JTextField idField, nameField, emailField, phoneField, addressField;
+    private JTable table;
+    private DefaultTableModel tableModel;
+
+    public PersonalInfoSystem() {
+        // Frame setup
+        setTitle("Personal Information System");
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setSize(800, 600);
+        setLayout(new BorderLayout());
+
+        // Top Panel: Form for input
+        JPanel formPanel = new JPanel(new GridLayout(5, 2, 10, 10));
+        formPanel.setBorder(BorderFactory.createTitledBorder("Personal Info"));
+
+        formPanel.add(new JLabel("ID (Auto-generated):"));
+        idField = new JTextField();
+        idField.setEditable(false);
+        formPanel.add(idField);
+
+        formPanel.add(new JLabel("Name:"));
+        nameField = new JTextField();
+        formPanel.add(nameField);
+
+        formPanel.add(new JLabel("Email:"));
+        emailField = new JTextField();
+        formPanel.add(emailField);
+
+        formPanel.add(new JLabel("Phone:"));
+        phoneField = new JTextField();
+        formPanel.add(phoneField);
+
+        formPanel.add(new JLabel("Address:"));
+        addressField = new JTextField();
+        formPanel.add(addressField);
+
+        add(formPanel, BorderLayout.NORTH);
+
+        // Center Panel: Table to display records
+        tableModel = new DefaultTableModel(new String[]{"ID", "Name", "Email", "Phone", "Address"}, 0);
+        table = new JTable(tableModel);
+        JScrollPane tableScrollPane = new JScrollPane(table);
+        table.setFillsViewportHeight(true);
+        add(tableScrollPane, BorderLayout.CENTER);
+
+        // Bottom Panel: Buttons for operations
+        JPanel buttonPanel = new JPanel(new GridLayout(1, 4, 10, 10));
+        JButton addButton = new JButton("Add");
+        JButton updateButton = new JButton("Update");
+        JButton deleteButton = new JButton("Delete");
+        JButton refreshButton = new JButton("Refresh");
+
+        buttonPanel.add(addButton);
+        buttonPanel.add(updateButton);
+        buttonPanel.add(deleteButton);
+        buttonPanel.add(refreshButton);
+
+        add(buttonPanel, BorderLayout.SOUTH);
+
+        // Add action listeners for buttons
+        addButton.addActionListener(this::addRecord);
+        updateButton.addActionListener(this::updateRecord);
+        deleteButton.addActionListener(this::deleteRecord);
+        refreshButton.addActionListener(e -> fetchRecords());
+
+        // Load initial data
+        initializeDatabase();
+        fetchRecords();
+    }
+
+    // Initialize database (Create table if not exists)
+    private void initializeDatabase() {
+        try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD);
+             Statement stmt = conn.createStatement()) {
+            String createTableSQL = """
+                    CREATE TABLE IF NOT EXISTS PersonalInfo (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        name VARCHAR(100) NOT NULL,
+                        email VARCHAR(100) NOT NULL UNIQUE,
+                        phone VARCHAR(15),
+                        address TEXT
+                    );
+                    """;
+            stmt.execute(createTableSQL);
+        } catch (SQLException e) {
+            showErrorDialog("Error initializing database: " + e.getMessage());
+        }
+    }
+
+    // Fetch all records from the database and populate the table
+    private void fetchRecords() {
+        try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD);
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("SELECT * FROM PersonalInfo")) {
+            tableModel.setRowCount(0); // Clear existing rows
+            while (rs.next()) {
+                tableModel.addRow(new Object[]{
+                        rs.getInt("id"),
+                        rs.getString("name"),
+                        rs.getString("email"),
+                        rs.getString("phone"),
+                        rs.getString("address")
+                });
+            }
+        } catch (SQLException e) {
+            showErrorDialog("Error fetching records: " + e.getMessage());
+        }
+    }
+
+    // Add a new record to the database
+    private void addRecord(ActionEvent e) {
+        String name = nameField.getText();
+        String email = emailField.getText();
+        String phone = phoneField.getText();
+        String address = addressField.getText();
+
+        if (name.isEmpty() || email.isEmpty()) {
+            showErrorDialog("Name and Email are required!");
+            return;
+        }
+
+        try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD)) {
+            String insertSQL = "INSERT INTO PersonalInfo (name, email, phone, address) VALUES (?, ?, ?, ?)";
+            PreparedStatement stmt = conn.prepareStatement(insertSQL);
+            stmt.setString(1, name);
+            stmt.setString(2, email);
+            stmt.setString(3, phone);
+            stmt.setString(4, address);
+            stmt.executeUpdate();
+            showInfoDialog("Record added successfully!");
+            fetchRecords();
+        } catch (SQLException ex) {
+            showErrorDialog("Error adding record: " + ex.getMessage());
+        }
+    }
+
+    // Update a selected record in the database
+    private void updateRecord(ActionEvent e) {
+        int selectedRow = table.getSelectedRow();
+        if (selectedRow == -1) {
+            showErrorDialog("Please select a record to update!");
+            return;
+        }
+
+        int id = (int) tableModel.getValueAt(selectedRow, 0);
+        String name = nameField.getText();
+        String email = emailField.getText();
+        String phone = phoneField.getText();
+        String address = addressField.getText();
+
+        if (name.isEmpty() || email.isEmpty()) {
+            showErrorDialog("Name and Email are required!");
+            return;
+        }
+
+        try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD)) {
+            String updateSQL = "UPDATE PersonalInfo SET name = ?, email = ?, phone = ?, address = ? WHERE id = ?";
+            PreparedStatement stmt = conn.prepareStatement(updateSQL);
+            stmt.setString(1, name);
+            stmt.setString(2, email);
+            stmt.setString(3, phone);
+            stmt.setString(4, address);
+            stmt.setInt(5, id);
+            stmt.executeUpdate();
+            showInfoDialog("Record updated successfully!");
+            fetchRecords();
+        } catch (SQLException ex) {
+            showErrorDialog("Error updating record: " + ex.getMessage());
+        }
+    }
+
+    // Delete a selected record from the database
+    private void deleteRecord(ActionEvent e) {
+        int selectedRow = table.getSelectedRow();
+        if (selectedRow == -1) {
+            showErrorDialog("Please select a record to delete!");
+            return;
+        }
+
+        int id = (int) tableModel.getValueAt(selectedRow, 0);
+
+        try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD)) {
+            String deleteSQL = "DELETE FROM PersonalInfo WHERE id = ?";
+            PreparedStatement stmt = conn.prepareStatement(deleteSQL);
+            stmt.setInt(1, id);
+            stmt.executeUpdate();
+            showInfoDialog("Record deleted successfully!");
+            fetchRecords();
+        } catch (SQLException ex) {
+            showErrorDialog("Error deleting record: " + ex.getMessage());
+        }
+    }
+
+    // Utility method to show error messages
+    private void showErrorDialog(String message) {
+        JOptionPane.showMessageDialog(this, message, "Error", JOptionPane.ERROR_MESSAGE);
+    }
+
+    // Utility method to show information messages
+    private void showInfoDialog(String message) {
+        JOptionPane.showMessageDialog(this, message, "Info", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    // Main method
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(() -> {
+            PersonalInfoSystem app = new PersonalInfoSystem();
+            app.setVisible(true);
+        });
+    }
+}
